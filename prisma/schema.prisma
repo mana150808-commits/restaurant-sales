@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Restaurant {
+  id               String    @id @default(cuid())
+  placeId          String    @unique
+  name             String
+  address          String?
+  phone            String?
+  website          String?
+  googleMapsUrl    String?
+  rating           Float?
+  userRatingsTotal Int?
+  types            String?
+
+  siteStatus       String    @default("unknown")
+  siteScore        Int?
+  siteCheckedAt    DateTime?
+  hasMobileSupport Boolean?
+  hasContactForm   Boolean?
+  hasReservation   Boolean?
+  pageCount        Int?
+
+  salesStatus    String    @default("new")
+  memo           String?
+  salesUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  histories SalesHistory[]
+}
+
+model SalesHistory {
+  id           String     @id @default(cuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  action       String
+  note         String?
+  createdAt    DateTime   @default(now())
+}
+
+model SearchJob {
+  id        String   @id @default(cuid())
+  area      String
+  keyword   String
+  status    String   @default("pending")
+  total     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
