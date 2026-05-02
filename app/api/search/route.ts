@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server"
-import { prisma } from "@/lib/prisma"
-import { checkSiteQuality } from "@/lib/site-checker"
+import { db } from "@/lib/firebase"
+import { checkSiteQuality, calcContextScore } from "@/lib/site-checker"
+import { checkNearbyPlaces } from "@/lib/nearby-checker"
 
 const PLACES_API_URL = "https://places.googleapis.com/v1/places:searchText"
 const FIELD_MASK = [
@@ -11,8 +12,10 @@ const FIELD_MASK = [
   "places.nationalPhoneNumber",
   "places.rating",
   "places.userRatingCount",
+  "places.priceLevel",
   "places.types",
   "places.googleMapsUri",
+  "places.location",
   "nextPageToken",
 ].join(",")
 
@@ -27,8 +30,11 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "area は必須です" }, { status: 400 })
   }
 
-  const searchJob = await prisma.searchJob.create({
-    data: { area, keyword, status: "running" },
+  const jobRef = await db.collection("searchJobs").add({
+    area,
+    keyword,
+    status: "running",
+    createdAt: new Date().toISOString(),
   })
 
   let collected = 0
@@ -39,7 +45,7 @@ export async function POST(req: NextRequest) {
       const body: Record<string, unknown> = {
         textQuery: `${keyword} ${area}`,
         languageCode: "ja",
-        maxResultCount: 20,
+        pageSize: 20,
       }
       if (pageToken) body.pageToken = pageToken
 
@@ -62,55 +68,58 @@ export async function POST(req: NextRequest) {
       const places = data.places || []
       pageToken = data.nextPageToken
 
-      for (const place of places) {
-        const website = place.websiteUri || null
-        const siteResult = await checkSiteQuality(website)
+      await Promise.all(places.map(async (place: Record<string, unknown>) => {
+        const website = (place.websiteUri as string) || null
+        const location = place.location as { latitude?: number; longitude?: number } | null
+        const lat = location?.latitude ?? null
+        const lng = location?.longitude ?? null
+        const priceLevel = (place.priceLevel as string) || null
+        const userRatingsTotal = (place.userRatingCount as number) || null
 
-        await prisma.restaurant.upsert({
-          where: { placeId: place.id },
-          create: {
-            placeId: place.id,
-            name: place.displayName?.text || "不明",
-            address: place.formattedAddress || null,
-            phone: place.nationalPhoneNumber || null,
-            website,
-            googleMapsUrl: place.googleMapsUri || null,
-            rating: place.rating || null,
-            userRatingsTotal: place.userRatingCount || null,
-            types: place.types?.join(",") || null,
-            ...siteResult,
-            siteCheckedAt: new Date(),
-          },
-          update: {
-            name: place.displayName?.text || "不明",
-            address: place.formattedAddress || null,
-            phone: place.nationalPhoneNumber || null,
-            website,
-            googleMapsUrl: place.googleMapsUri || null,
-            rating: place.rating || null,
-            userRatingsTotal: place.userRatingCount || null,
-            types: place.types?.join(",") || null,
-            ...siteResult,
-            siteCheckedAt: new Date(),
-          },
-        })
+        const [siteResult, nearbyPlaces] = await Promise.all([
+          checkSiteQuality(website),
+          lat && lng ? checkNearbyPlaces(lat, lng, apiKey) : Promise.resolve([]),
+        ])
+
+        const contextScore = calcContextScore({ priceLevel, nearbyPlaces, userRatingsTotal })
+        const finalScore = Math.min(200, siteResult.siteScore + contextScore)
+
+        const restaurantData = {
+          placeId: place.id,
+          name: (place.displayName as { text?: string })?.text || "不明",
+          address: (place.formattedAddress as string) || null,
+          phone: (place.nationalPhoneNumber as string) || null,
+          website,
+          googleMapsUrl: (place.googleMapsUri as string) || null,
+          rating: (place.rating as number) || null,
+          userRatingsTotal,
+          priceLevel,
+          types: (place.types as string[])?.join(",") || null,
+          latitude: lat,
+          longitude: lng,
+          nearbyPlaces: JSON.stringify(nearbyPlaces),
+          ...siteResult,
+          siteScore: finalScore,
+          siteCheckedAt: new Date().toISOString(),
+        }
+
+        const ref = db.collection("restaurants").doc(place.id as string)
+        const snap = await ref.get()
+        if (!snap.exists) {
+          await ref.set({ ...restaurantData, createdAt: new Date().toISOString() })
+        } else {
+          await ref.update(restaurantData)
+        }
         collected++
-      }
+      }))
 
       if (!pageToken) break
     } while (collected < 60)
 
-    await prisma.searchJob.update({
-      where: { id: searchJob.id },
-      data: { status: "done", total: collected },
-    })
-
-    return Response.json({ success: true, collected, jobId: searchJob.id })
+    await jobRef.update({ status: "done", total: collected })
+    return Response.json({ success: true, collected, jobId: jobRef.id })
   } catch (error) {
-    await prisma.searchJob.update({
-      where: { id: searchJob.id },
-      data: { status: "error" },
-    })
+    await jobRef.update({ status: "error" })
     return Response.json(
       { error: error instanceof Error ? error.message : "不明なエラー" },
       { status: 500 }

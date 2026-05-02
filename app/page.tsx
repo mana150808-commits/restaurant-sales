@@ -5,6 +5,8 @@ import SearchForm from "./_components/SearchForm"
 import RestaurantTable from "./_components/RestaurantTable"
 import FilterBar from "./_components/FilterBar"
 import StatsBar from "./_components/StatsBar"
+import RouteOptimizer from "./_components/RouteOptimizer"
+import ProposalHelper from "./_components/ProposalHelper"
 
 export type Restaurant = {
   id: string
@@ -25,6 +27,15 @@ export type Restaurant = {
   memo: string | null
   siteCheckedAt: string | null
   updatedAt: string
+  nearbyPlaces: string | null
+  latitude: number | null
+  longitude: number | null
+  hasInstagram: boolean | null
+  hasSNS: boolean | null
+  hasMultipleLocations: boolean | null
+  hasLunch: boolean | null
+  hasEnglish: boolean | null
+  priceLevel: string | null
 }
 
 export default function Home() {
@@ -35,6 +46,7 @@ export default function Home() {
   const [siteStatus, setSiteStatus] = useState("all")
   const [search, setSearch] = useState("")
   const [message, setMessage] = useState("")
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const fetchRestaurants = useCallback(async () => {
     setLoading(true)
@@ -86,6 +98,18 @@ export default function Home() {
     } catch {
       setMessage("更新中にエラーが発生しました")
     }
+  }
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else if (next.size < 5) {
+        next.add(id)
+      }
+      return next
+    })
   }
 
   const handleStatusUpdate = async (id: string, salesStatus: string, memo?: string) => {
@@ -144,9 +168,20 @@ export default function Home() {
             <RestaurantTable
               restaurants={restaurants}
               onStatusUpdate={handleStatusUpdate}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
             />
           )}
         </div>
+        <RouteOptimizer
+          selectedRestaurants={restaurants.filter(r => selectedIds.has(r.id))}
+          allRestaurants={restaurants}
+          selectedIds={selectedIds}
+        />
+        <ProposalHelper
+          selectedRestaurants={restaurants.filter(r => selectedIds.has(r.id))}
+          allRestaurants={restaurants}
+        />
       </main>
     </div>
   )

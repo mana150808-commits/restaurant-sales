@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { db } from "@/lib/firebase"
 
 export async function PATCH(
   req: NextRequest,
@@ -7,27 +7,22 @@ export async function PATCH(
 ) {
   const { id } = await params
   const body = await req.json()
-
   const { salesStatus, memo } = body
 
-  const updated = await prisma.restaurant.update({
-    where: { id },
-    data: {
-      ...(salesStatus !== undefined && { salesStatus }),
-      ...(memo !== undefined && { memo }),
-      salesUpdatedAt: new Date(),
-    },
-  })
+  const updateData: Record<string, unknown> = { salesUpdatedAt: new Date().toISOString() }
+  if (salesStatus !== undefined) updateData.salesStatus = salesStatus
+  if (memo !== undefined) updateData.memo = memo
+
+  await db.collection("restaurants").doc(id).update(updateData)
 
   if (salesStatus) {
-    await prisma.salesHistory.create({
-      data: {
-        restaurantId: id,
-        action: salesStatus,
-        note: memo || null,
-      },
+    await db.collection("salesHistory").add({
+      restaurantId: id,
+      action: salesStatus,
+      note: memo || null,
+      createdAt: new Date().toISOString(),
     })
   }
 
-  return Response.json(updated)
+  return Response.json({ id, ...updateData })
 }

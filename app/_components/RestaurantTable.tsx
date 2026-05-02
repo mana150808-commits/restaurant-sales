@@ -6,6 +6,8 @@ import type { Restaurant } from "../page"
 type Props = {
   restaurants: Restaurant[]
   onStatusUpdate: (id: string, salesStatus: string, memo?: string) => void
+  selectedIds: Set<string>
+  onToggleSelect: (id: string) => void
 }
 
 const SITE_STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -32,7 +34,7 @@ const SALES_STATUS_COLORS: Record<string, string> = {
   dismissed: "bg-gray-200 text-gray-400",
 }
 
-export default function RestaurantTable({ restaurants, onStatusUpdate }: Props) {
+export default function RestaurantTable({ restaurants, onStatusUpdate, selectedIds, onToggleSelect }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [memoText, setMemoText] = useState("")
 
@@ -51,6 +53,9 @@ export default function RestaurantTable({ restaurants, onStatusUpdate }: Props) 
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-200 text-left text-xs text-gray-500">
+            <th className="pb-2 pr-3 font-medium w-8">
+              <span className="text-gray-400 text-xs">最大5件</span>
+            </th>
             <th className="pb-2 pr-3 font-medium">店名</th>
             <th className="pb-2 pr-3 font-medium">住所</th>
             <th className="pb-2 pr-3 font-medium">電話</th>
@@ -58,13 +63,23 @@ export default function RestaurantTable({ restaurants, onStatusUpdate }: Props) 
             <th className="pb-2 pr-3 font-medium">スコア</th>
             <th className="pb-2 pr-3 font-medium">特徴</th>
             <th className="pb-2 pr-3 font-medium">評価</th>
+            <th className="pb-2 pr-3 font-medium">周辺施設</th>
             <th className="pb-2 pr-3 font-medium">営業ステータス</th>
             <th className="pb-2 font-medium">メモ</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
           {restaurants.map((r) => (
-            <tr key={r.id} className="hover:bg-gray-50 transition">
+            <tr key={r.id} className={`hover:bg-gray-50 transition ${selectedIds.has(r.id) ? "bg-blue-50" : ""}`}>
+              <td className="py-2 pr-3">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(r.id)}
+                  onChange={() => onToggleSelect(r.id)}
+                  disabled={!selectedIds.has(r.id) && selectedIds.size >= 5}
+                  className="w-4 h-4 cursor-pointer accent-blue-600 disabled:cursor-not-allowed"
+                />
+              </td>
               <td className="py-2 pr-3">
                 <div className="font-medium text-gray-900">{r.name}</div>
                 {r.website ? (
@@ -103,7 +118,7 @@ export default function RestaurantTable({ restaurants, onStatusUpdate }: Props) 
                 )}
               </td>
               <td className="py-2 pr-3">
-                <div className="flex gap-1">
+                <div className="flex flex-wrap gap-1">
                   {r.hasMobileSupport && (
                     <span title="モバイル対応" className="text-xs bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded">SP</span>
                   )}
@@ -113,10 +128,48 @@ export default function RestaurantTable({ restaurants, onStatusUpdate }: Props) 
                   {r.hasReservation && (
                     <span title="予約機能" className="text-xs bg-purple-50 text-purple-500 px-1.5 py-0.5 rounded">予</span>
                   )}
+                  {r.hasInstagram && (
+                    <span title="Instagram運用中" className="text-xs bg-pink-50 text-pink-500 px-1.5 py-0.5 rounded">📸</span>
+                  )}
+                  {r.hasSNS && !r.hasInstagram && (
+                    <span title="SNSあり" className="text-xs bg-sky-50 text-sky-500 px-1.5 py-0.5 rounded">SNS</span>
+                  )}
+                  {r.hasMultipleLocations && (
+                    <span title="複数店舗展開" className="text-xs bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">多店舗</span>
+                  )}
+                  {r.priceLevel === "PRICE_LEVEL_EXPENSIVE" && (
+                    <span title="高価格帯" className="text-xs bg-yellow-50 text-yellow-700 px-1.5 py-0.5 rounded">¥¥¥</span>
+                  )}
+                  {r.priceLevel === "PRICE_LEVEL_VERY_EXPENSIVE" && (
+                    <span title="最高価格帯" className="text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded">¥¥¥¥</span>
+                  )}
                 </div>
               </td>
               <td className="py-2 pr-3 text-xs text-gray-600">
                 {r.rating ? `★ ${r.rating}` : "-"}
+              </td>
+              <td className="py-2 pr-3">
+                {(() => {
+                  const places = JSON.parse(r.nearbyPlaces || "[]") as { name: string; label: string; type: string }[]
+                  if (places.length === 0) return <span className="text-xs text-gray-300">-</span>
+                  const ICONS: Record<string, string> = {
+                    university: "🎓", shopping_mall: "🏬", department_store: "🏬",
+                    train_station: "🚉", tourist_attraction: "🏛", stadium: "🏟",
+                    amusement_park: "🎡", hospital: "🏥", office_building: "🏢", park: "🌳",
+                  }
+                  return (
+                    <div className="flex flex-col gap-0.5">
+                      {places.slice(0, 3).map((p, i) => (
+                        <span key={i} className="text-xs bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded whitespace-nowrap" title={p.name}>
+                          {ICONS[p.type] || "📍"} {p.label}
+                        </span>
+                      ))}
+                      {places.length > 3 && (
+                        <span className="text-xs text-gray-400">他{places.length - 3}件</span>
+                      )}
+                    </div>
+                  )
+                })()}
               </td>
               <td className="py-2 pr-3">
                 <select
