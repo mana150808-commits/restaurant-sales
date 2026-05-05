@@ -2,11 +2,9 @@ import { initializeApp, getApps, cert } from "firebase-admin/app"
 import { getFirestore } from "firebase-admin/firestore"
 
 if (!getApps().length) {
-  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
-    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
-    : require("../serviceAccountKey.json")
-
-  initializeApp({ credential: cert(serviceAccount) })
+  const key = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
+  if (!key) throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY が設定されていません")
+  initializeApp({ credential: cert(JSON.parse(key)) })
 }
 
 export const db = getFirestore()

@@ -6,6 +6,7 @@ import RestaurantTable from "./_components/RestaurantTable"
 import FilterBar from "./_components/FilterBar"
 import StatsBar from "./_components/StatsBar"
 import RouteOptimizer from "./_components/RouteOptimizer"
+import Dashboard from "./_components/Dashboard"
 import ProposalHelper from "./_components/ProposalHelper"
 
 export type Restaurant = {
@@ -138,6 +139,7 @@ export default function Home() {
         )}
 
         <StatsBar restaurants={restaurants} />
+        <Dashboard restaurants={restaurants} />
 
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
