@@ -93,6 +93,8 @@ export async function checkSiteQuality(url: string | null): Promise<SiteCheckRes
         hasInstagram: false,
         hasSNS: false,
         hasMultipleLocations: false,
+        hasLunch: false,
+        hasEnglish: false,
       }
     }
 
