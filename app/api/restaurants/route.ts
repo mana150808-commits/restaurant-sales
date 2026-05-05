@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get("search")
 
   const snapshot = await db.collection("restaurants").get()
-  let restaurants = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+  let restaurants = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as Record<string, unknown> }))
 
   if (salesStatus && salesStatus !== "all") {
     restaurants = restaurants.filter(r => r.salesStatus === salesStatus)
